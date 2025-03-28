@@ -1,0 +1,103 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongo-configmap
+data:
+  init.sh: |
+    #!/bin/bash
+    set -e
+
+    REPLICA_SET="rs0"
+    MEMBERS=(
+        "mongodb-0.mongodb.default.svc.cluster.local:27017"
+        "mongodb-1.mongodb.default.svc.cluster.local:27017"
+        "mongodb-2.mongodb.default.svc.cluster.local:27017"
+    )
+
+    wait_for_mongo() {
+        local host=$1
+        echo "Waiting for $host to be ready..."
+        until mongosh --host "$host" --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
+            echo "$host is not ready yet... sleeping"
+            sleep 2
+        done
+        echo "$host is ready!"
+    }
+
+    # ========== MongoDB-0 ==========
+
+    if [[ "$(hostname)" == "mongodb-0" ]]; then
+
+        echo "[MongoDB-0] Starting mongod without auth..."
+        mongod --replSet "$REPLICA_SET" --bind_ip_all --fork --logpath /var/log/mongodb.log
+
+        wait_for_mongo "localhost"
+
+        echo "[MongoDB-0] Checking ReplicaSet initiation status..."
+        if mongosh --quiet --eval "rs.status().ok" | grep "1" >/dev/null 2>&1; then
+            echo "[MongoDB-0] ReplicaSet already initiated."
+        else
+            echo "[MongoDB-0] Initiating ReplicaSet..."
+
+            for member in "${MEMBERS[@]:1}"; do
+                wait_for_mongo "${member%%:*}"
+            done
+
+            mongosh --eval "
+                rs.initiate({
+                    _id: '$REPLICA_SET',
+                    members: [
+                        { _id: 0, host: '${MEMBERS[0]}', priority: 2, votes: 1 },
+                        { _id: 1, host: '${MEMBERS[1]}', priority: 1, votes: 1 },
+                        { _id: 2, host: '${MEMBERS[2]}', priority: 1, votes: 1 }
+                    ]
+                })
+            "
+          
+          # ⏳ Wait until PRIMARY before creating user
+          echo "[MongoDB-0] Waiting to become PRIMARY..."
+          until mongosh --quiet --eval "db.hello().isWritablePrimary" | grep "true" >/dev/null 2>&1; do
+              echo "[MongoDB-0] Not PRIMARY yet, sleeping..."
+              sleep 2
+          done
+
+          echo "[MongoDB-0] PRIMARY confirmed."
+
+          if mongosh --eval "db.getSiblingDB('admin').system.users.find({user:'${MONGO_INITDB_ROOT_USERNAME}'}).count()" | grep "0" >/dev/null; then
+              echo "[MongoDB-0] Creating root user..."
+              mongosh --eval "
+                  db.getSiblingDB('admin').createUser({
+                      user: '${MONGO_INITDB_ROOT_USERNAME}',
+                      pwd: '${MONGO_INITDB_ROOT_PASSWORD}',
+                      roles: [ { role: 'root', db: 'admin' } ]
+                  })
+              "
+          else
+              echo "[MongoDB-0] Root user already exists."
+          fi
+        fi
+
+
+        mongod --shutdown
+
+        echo "[MongoDB-0] Restarting mongod with --keyFile"
+        exec mongod --replSet "$REPLICA_SET" --bind_ip_all --keyFile /etc/secrets/keyfile --logpath /var/log/mongodb.log
+
+    # ========== MongoDB-1 & MongoDB-2 ==========
+
+    else
+
+        echo "[MongoDB-x] Starting mongod without keyfile..."
+        mongod --replSet "$REPLICA_SET" --bind_ip_all --fork --logpath /var/log/mongodb.log
+
+        until mongosh --host "${MEMBERS[0]}" --username "${MONGO_INITDB_ROOT_USERNAME}" --password "${MONGO_INITDB_ROOT_PASSWORD}" --authenticationDatabase "admin" --eval "rs.status().ok" | grep "1" >/dev/null 2>&1; do
+            echo "[MongoDB-x] Waiting for ReplicaSet to be ready (auth)..."
+            sleep 3
+        done
+
+        mongod --shutdown
+
+        echo "[MongoDB-x] Restarting mongod with --keyFile"
+        exec mongod --replSet "$REPLICA_SET" --bind_ip_all --keyFile /etc/secrets/keyfile --logpath /var/log/mongodb.log
+
+    fi
