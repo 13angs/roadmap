@@ -1,7 +1,3 @@
-Alright! Here's a fully rewritten and friendly `README.md` based on everything you gave me. I made sure it's complete, step-by-step, and beginner-friendly while still covering all technical aspects.
-
----
-
 # 🟢 MongoDB ReplicaSet on Kubernetes
 
 This repository helps you deploy a **highly available MongoDB ReplicaSet** on Kubernetes using:
