@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
 def hello_world():
-    NAME = os.getenv('NAME', 'World')
+    NAME = os.getenv('NAME', 'Worlds')
     response = {'message': f'Hello, {NAME}!'}
     return jsonify(response)
 
