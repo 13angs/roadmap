@@ -16,14 +16,22 @@ jobs:
       # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch full commit history
 
       # Step 2: Detect changed directories
       - name: Detect Changed Directories
         id: detect
         run: |
+          # Ensure we have the full commit history
+          git fetch --unshallow || true
+
+          # Find directories under 'docker/' with changed files
           CHANGED_DIRS=$(git diff --name-only HEAD~1 HEAD | grep '^docker/' | cut -d'/' -f2 | sort | uniq)
           echo "Changed directories: $CHANGED_DIRS"
-          echo "::set-output name=changed_dirs::$CHANGED_DIRS"
+
+          # Save the output in an environment file
+          echo "changed_dirs=$CHANGED_DIRS" >> $GITHUB_ENV
 
   build-changed-apps:
     name: Build Changed Apps
