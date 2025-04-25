@@ -31,7 +31,7 @@ jobs:
           echo "Changed directories: $CHANGED_DIRS"
 
           # Save the output in an environment file
-          echo "changed_dirs=$CHANGED_DIRS" >> $GITHUB_ENV
+          echo "changed_dirs=$(echo "[\"$(echo $CHANGED_DIRS | tr ' ' '\",\"')\"]")" >> $GITHUB_ENV
 
   build-changed-apps:
     name: Build Changed Apps
