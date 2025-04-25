@@ -1,0 +1,42 @@
+name: Trigger Builds for Changed Apps
+
+on:
+  push:
+    paths:
+      - 'docker/**'
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed_dirs: ${{ steps.detect.outputs.changed_dirs }}
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Detect changed directories
+      - name: Detect Changed Directories
+        id: detect
+        run: |
+          CHANGED_DIRS=$(git diff --name-only HEAD~1 HEAD | grep '^docker/' | cut -d'/' -f2 | sort | uniq)
+          echo "Changed directories: $CHANGED_DIRS"
+          echo "::set-output name=changed_dirs::$CHANGED_DIRS"
+
+  build-changed-apps:
+    name: Build Changed Apps
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app-dir: ${{ fromJson(needs.detect-changes.outputs.changed_dirs) }}
+      fail-fast: false
+
+    steps:
+      # Step 1: Trigger reusable workflow for each changed app
+      - name: Call Reusable Workflow
+        uses: ./.github/workflows/build-app.yml
+        with:
+          app-dir: ${{ matrix.app-dir }}
