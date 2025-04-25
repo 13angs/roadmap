@@ -1,8 +1,4 @@
-แน่นอน! ด้านล่างนี้คือเนื้อหาที่แปลงจากบทความข้างต้นให้อยู่ในรูปแบบที่เหมาะสมกับไฟล์ `README.md` สำหรับโปรเจกต์ REST API ที่ใช้ Flask และ Docker:
-
----
-
-# 🐳 Flask REST API Dockerized
+# 🐳 Containerize backend app
 
 ## 📄 Description
 
