@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
 def hello_world():
-    NAME = os.getenv('NAME', 'K8s')
+    NAME = os.getenv('NAME', 'Docker')
     response = {'message': f'Hello, {NAME}!'}
     return jsonify(response)
 
